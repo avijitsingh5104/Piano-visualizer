@@ -1,6 +1,4 @@
 // lib/widgets/piano_roll.dart
-// CHANGED: removed RepaintBoundary from here — it now lives in home_screen.dart
-// wrapping the full UI so video capture includes background + keyboard.
 
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -41,7 +39,10 @@ class PianoRollVisualizer extends StatefulWidget {
 class _PianoRollVisualizerState extends State<PianoRollVisualizer>
     with SingleTickerProviderStateMixin {
 
-  final List<_NoteBar> _bars = [];
+  // FIX: _bars is now owned by PianoState (shared between both visualizer
+  // instances). This widget only keeps live-note tracking and the repaint
+  // notifier — it no longer registers onSpawnBar, so both instances draw
+  // the same bars without fighting over the single callback slot.
   final Map<int, DateTime> _liveNoteStart = {};
   final _repaintNotifier = ValueNotifier<int>(0);
 
@@ -58,21 +59,21 @@ class _PianoRollVisualizerState extends State<PianoRollVisualizer>
     super.initState();
 
     _ticker = createTicker((_) {
-      final now = DateTime.now();
-      _bars.removeWhere((bar) {
+      final state = context.read<PianoState>();
+      final now   = DateTime.now();
+
+      // Update positions and remove expired bars directly on the shared list
+      state.bars.removeWhere((bar) {
         _updateBarPosition(bar, now);
         if (_isFalling) return bar.y > _canvasHeight + 50;
         return bar.y + bar.height < -50;
       });
+
       _repaintNotifier.value++;
     })..start();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<PianoState>().onSpawnBar = _spawnPlaybackBar;
-    });
   }
 
-  void _updateBarPosition(_NoteBar bar, DateTime now) {
+  void _updateBarPosition(NoteBar bar, DateTime now) {
     if (!bar.isPlayback) {
       bar.y += _isFalling ? kFallSpeed : -kFallSpeed;
     } else {
@@ -86,13 +87,12 @@ class _PianoRollVisualizerState extends State<PianoRollVisualizer>
 
   @override
   void dispose() {
-    try { context.read<PianoState>().onSpawnBar = null; } catch (_) {}
     _ticker.dispose();
     _repaintNotifier.dispose();
     super.dispose();
   }
 
-  void _handleLiveNotes(Set<int> currentNotes, bool isFalling) {
+  void _handleLiveNotes(PianoState state, Set<int> currentNotes, bool isFalling) {
     final now = DateTime.now();
     for (final midi in currentNotes.difference(_lastNotes)) {
       _liveNoteStart[midi] = now;
@@ -102,7 +102,7 @@ class _PianoRollVisualizerState extends State<PianoRollVisualizer>
       if (start != null) {
         final height =
         (now.difference(start).inMilliseconds / 5).clamp(20, 300).toDouble();
-        _bars.add(_NoteBar.live(
+        state.bars.add(NoteBar.live(
           midi: midi, y: isFalling ? -height : _canvasHeight,
           height: height, velocity: 100,
         ));
@@ -111,35 +111,29 @@ class _PianoRollVisualizerState extends State<PianoRollVisualizer>
     _lastNotes = Set.of(currentNotes);
   }
 
-  void _spawnPlaybackBar(int midi, int velocity) {
-    _bars.add(_NoteBar.playback(
-      midi: midi, height: 40, velocity: velocity, spawnedAt: DateTime.now(),
-    ));
-  }
-
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
       _canvasHeight = constraints.maxHeight;
 
       return Consumer<PianoState>(builder: (_, state, __) {
-        _isFalling  = state.fallingMode;
-        _noteColor  = state.noteColor;
+        _isFalling = state.fallingMode;
+        _noteColor = state.noteColor;
 
         if (_lastMode != state.fallingMode) {
-          _bars.clear();
+          state.bars.clear();
           _liveNoteStart.clear();
           _lastNotes.clear();
           _lastMode = state.fallingMode;
         }
 
         if (!state.isPlaying) {
-          _handleLiveNotes(state.activeNotes, state.fallingMode);
+          _handleLiveNotes(state, state.activeNotes, state.fallingMode);
         }
 
         return CustomPaint(
           painter: _RollPainter(
-            bars:      _bars,
+            bars:      state.bars,
             noteColor: _noteColor,
             isFalling: _isFalling,
             repaint:   _repaintNotifier,
@@ -153,7 +147,8 @@ class _PianoRollVisualizerState extends State<PianoRollVisualizer>
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 
-class _NoteBar {
+// Made public (NoteBar instead of _NoteBar) so PianoState can own the list.
+class NoteBar {
   final int midi;
   double y;
   final double height;
@@ -162,12 +157,12 @@ class _NoteBar {
   final bool isPlayback;
   final DateTime spawnedAt;
 
-  _NoteBar.playback({
+  NoteBar.playback({
     required this.midi, required this.height,
     required this.velocity, required this.spawnedAt,
   })  : y = 0, phase = 0, isPlayback = true;
 
-  _NoteBar.live({
+  NoteBar.live({
     required this.midi, required this.y,
     required this.height, required this.velocity,
   })  : phase = 0, isPlayback = false,
@@ -177,7 +172,7 @@ class _NoteBar {
 // ── Painter ───────────────────────────────────────────────────────────────────
 
 class _RollPainter extends CustomPainter {
-  final List<_NoteBar> bars;
+  final List<NoteBar> bars;
   final Color noteColor;
   final bool isFalling;
 
@@ -197,7 +192,6 @@ class _RollPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Draw solid background so captured frames are never transparent/black
     canvas.drawRect(
       Rect.fromLTWH(0, 0, size.width, size.height),
       Paint()..color = const Color(0xFF0A0A0F),
