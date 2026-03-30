@@ -9,6 +9,7 @@ import '../widgets/piano_roll.dart';
 import '../services/recording_service.dart';
 import '../services/video_export_service.dart';
 import '../widgets/recordings_panel.dart';
+import '../widgets/color_picker_dialog.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -41,12 +42,6 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
 
           // ── Layer 0: clean export canvas ───────────────────────────────
-          // Sits at the bottom of the Stack, fully painted at screen size.
-          // The visible UI (Layer 1) covers it with an opaque background
-          // so the user never sees it, but Flutter always paints it so
-          // toImage() never hits the !debugNeedsPaint assertion.
-          // Both PianoRollVisualizer instances share PianoState.bars so
-          // bars appear identically in both — no onSpawnBar race condition.
           Positioned.fill(
             child: RepaintBoundary(
               key: _exportBoundaryKey,
@@ -121,17 +116,24 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // Color picker button
+          // Color picker button — opens new full color picker dialog
           Positioned(
             bottom: 180,
             right: 16,
             child: Consumer<PianoState>(
               builder: (context, state, _) {
+                // Show gradient icon when dual mode is active
+                final iconColor = state.dualColorMode
+                    ? state.leftColor
+                    : state.noteColor;
                 return GestureDetector(
                   onTap: () {
                     showDialog(
                       context: context,
-                      builder: (_) => const _ColorPickerDialog(),
+                      builder: (_) => ChangeNotifierProvider.value(
+                        value: state,
+                        child: const ColorPickerDialog(),
+                      ),
                     );
                   },
                   child: Container(
@@ -141,7 +143,15 @@ class _HomeScreenState extends State<HomeScreen> {
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: const Color(0xFF44446A)),
                     ),
-                    child: Icon(Icons.palette, color: state.noteColor),
+                    child: state.dualColorMode
+                        ? ShaderMask(
+                      shaderCallback: (bounds) => LinearGradient(
+                        colors: [state.leftColor, state.rightColor],
+                      ).createShader(bounds),
+                      child: const Icon(Icons.palette,
+                          color: Colors.white),
+                    )
+                        : Icon(Icons.palette, color: iconColor),
                   ),
                 );
               },
@@ -178,53 +188,6 @@ class _HomeScreenState extends State<HomeScreen> {
           // MIDI device panel
           const MidiDeviceButton(),
         ],
-      ),
-    );
-  }
-}
-
-class _ColorPickerDialog extends StatelessWidget {
-  const _ColorPickerDialog();
-
-  static const colors = [
-    Colors.purple,
-    Colors.blue,
-    Colors.red,
-    Colors.green,
-    Colors.orange,
-    Colors.cyan,
-    Colors.pink,
-    Colors.yellow,
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: const Color(0xFF16161F),
-      shape:
-      RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: colors.map((c) {
-            return GestureDetector(
-              onTap: () {
-                context.read<PianoState>().setColor(c);
-                Navigator.pop(context);
-              },
-              child: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: c,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            );
-          }).toList(),
-        ),
       ),
     );
   }

@@ -39,10 +39,6 @@ class PianoRollVisualizer extends StatefulWidget {
 class _PianoRollVisualizerState extends State<PianoRollVisualizer>
     with SingleTickerProviderStateMixin {
 
-  // FIX: _bars is now owned by PianoState (shared between both visualizer
-  // instances). This widget only keeps live-note tracking and the repaint
-  // notifier — it no longer registers onSpawnBar, so both instances draw
-  // the same bars without fighting over the single callback slot.
   final Map<int, DateTime> _liveNoteStart = {};
   final _repaintNotifier = ValueNotifier<int>(0);
 
@@ -50,7 +46,6 @@ class _PianoRollVisualizerState extends State<PianoRollVisualizer>
   bool? _lastMode;
   bool _isFalling = true;
   double _canvasHeight = 600;
-  Color _noteColor = const Color(0xFFD060F0);
 
   late final Ticker _ticker;
 
@@ -62,7 +57,6 @@ class _PianoRollVisualizerState extends State<PianoRollVisualizer>
       final state = context.read<PianoState>();
       final now   = DateTime.now();
 
-      // Update positions and remove expired bars directly on the shared list
       state.bars.removeWhere((bar) {
         _updateBarPosition(bar, now);
         if (_isFalling) return bar.y > _canvasHeight + 50;
@@ -118,7 +112,6 @@ class _PianoRollVisualizerState extends State<PianoRollVisualizer>
 
       return Consumer<PianoState>(builder: (_, state, __) {
         _isFalling = state.fallingMode;
-        _noteColor = state.noteColor;
 
         if (_lastMode != state.fallingMode) {
           state.bars.clear();
@@ -133,10 +126,10 @@ class _PianoRollVisualizerState extends State<PianoRollVisualizer>
 
         return CustomPaint(
           painter: _RollPainter(
-            bars:      state.bars,
-            noteColor: _noteColor,
+            bars:     state.bars,
+            state:    state,
             isFalling: _isFalling,
-            repaint:   _repaintNotifier,
+            repaint:  _repaintNotifier,
           ),
           size: Size.infinite,
         );
@@ -147,7 +140,6 @@ class _PianoRollVisualizerState extends State<PianoRollVisualizer>
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 
-// Made public (NoteBar instead of _NoteBar) so PianoState can own the list.
 class NoteBar {
   final int midi;
   double y;
@@ -173,12 +165,12 @@ class NoteBar {
 
 class _RollPainter extends CustomPainter {
   final List<NoteBar> bars;
-  final Color noteColor;
+  final PianoState state; // needed for colorForNote()
   final bool isFalling;
 
   _RollPainter({
     required this.bars,
-    required this.noteColor,
+    required this.state,
     required this.isFalling,
     required ValueNotifier<int> repaint,
   }) : super(repaint: repaint);
@@ -210,7 +202,11 @@ class _RollPainter extends CustomPainter {
 
       final brightness = (bar.velocity / 127).clamp(0.4, 1.0);
       final pulse      = 0.5 + 0.5 * sin(bar.phase);
-      final baseColor  = noteColor.withOpacity(brightness.toDouble());
+
+      // Use colorForNote() so single/dual mode is handled in one place
+      final baseColor = state
+          .colorForNote(bar.midi)
+          .withOpacity(brightness.toDouble());
 
       _fillPaint.shader = LinearGradient(
         begin: Alignment.topCenter,

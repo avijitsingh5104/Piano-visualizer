@@ -28,7 +28,7 @@ class PianoKeyboard extends StatelessWidget {
           child: CustomPaint(
             painter: _KeyboardPainter(
               Set.of(state.activeNotes),
-              state.noteColor, // 🔥 pass color
+              state,
             ),
             size: Size.infinite,
           ),
@@ -55,9 +55,11 @@ void _onTouch(
 // — Painter —
 class _KeyboardPainter extends CustomPainter {
   final Set<int> activeNotes;
-  final Color noteColor;
+  final PianoState state;
 
-  _KeyboardPainter(this.activeNotes, this.noteColor);
+  _KeyboardPainter(this.activeNotes, this.state);
+
+  Color get noteColor => state.noteColor;
 
   static const _start = 21;  // A0
   static const _end   = 108; // C8
@@ -77,6 +79,7 @@ class _KeyboardPainter extends CustomPainter {
       final midi = whites[i];
       final active = activeNotes.contains(midi);
       final rect = Rect.fromLTWH(i * ww + 0.5, 0, ww - 1.5, size.height - 2);
+      final keyColor = state.colorForNote(midi);
 
       // Fill
       canvas.drawRRect(
@@ -87,8 +90,8 @@ class _KeyboardPainter extends CustomPainter {
             end: Alignment.bottomCenter,
             colors: active
                 ? [
-              noteColor.withOpacity(0.7),
-              noteColor,
+              keyColor.withOpacity(0.7),
+              keyColor,
             ]
                 : [
               const Color(0xFFF5F5FA),
@@ -102,7 +105,7 @@ class _KeyboardPainter extends CustomPainter {
         RRect.fromRectAndRadius(rect, const Radius.circular(3)),
         Paint()
           ..color = active
-              ? noteColor.withOpacity(0.8)
+              ? keyColor.withOpacity(0.8)
               : const Color(0xFFAAAAAA)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 0.5,
@@ -113,7 +116,7 @@ class _KeyboardPainter extends CustomPainter {
         canvas.drawRRect(
           RRect.fromRectAndRadius(rect, const Radius.circular(3)),
           Paint()
-            ..color = noteColor.withOpacity(0.25)
+            ..color = keyColor.withOpacity(0.25)
             ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
         );
       }
@@ -130,12 +133,13 @@ class _KeyboardPainter extends CustomPainter {
       final active = activeNotes.contains(midi);
       final x = (wi - 1) * ww + (ww - bw / 2) * 0.9;
       final rect = Rect.fromLTWH(x, 0, bw, bh);
+      final keyColor = state.colorForNote(midi);
 
       canvas.drawRRect(
         RRect.fromRectAndRadius(rect, const Radius.circular(2)),
         Paint()
           ..color = active
-              ? noteColor
+              ? keyColor
               : const Color(0xFF1A1A25),
       );
 
@@ -143,25 +147,32 @@ class _KeyboardPainter extends CustomPainter {
         canvas.drawRRect(
           RRect.fromRectAndRadius(rect, const Radius.circular(2)),
           Paint()
-            ..color = noteColor.withOpacity(0.4)
+            ..color = keyColor.withOpacity(0.4)
             ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
         );
       }
     }
 
     // — Top glow bar —
+    final glowColors = state.dualColorMode
+        ? [
+      Colors.transparent,
+      state.leftColor.withOpacity(0.7),
+      state.rightColor.withOpacity(0.7),
+      Colors.transparent,
+    ]
+        : [
+      Colors.transparent,
+      noteColor.withOpacity(0.6),
+      noteColor.withOpacity(0.9),
+      noteColor.withOpacity(0.6),
+      Colors.transparent,
+    ];
     canvas.drawRect(
       Rect.fromLTWH(0, 0, size.width, 3),
       Paint()
-        ..shader = LinearGradient(
-          colors: [
-            Colors.transparent,
-            noteColor.withOpacity(0.6),
-            noteColor.withOpacity(0.9),
-            noteColor.withOpacity(0.6),
-            Colors.transparent,
-          ],
-        ).createShader(Rect.fromLTWH(0, 0, size.width, 3)),
+        ..shader = LinearGradient(colors: glowColors)
+            .createShader(Rect.fromLTWH(0, 0, size.width, 3)),
     );
   }
 
@@ -193,5 +204,9 @@ class _KeyboardPainter extends CustomPainter {
   @override
   bool shouldRepaint(_KeyboardPainter old) =>
       !setEquals(old.activeNotes, activeNotes) ||
-          old.noteColor != noteColor;
+          old.state.noteColor != state.noteColor ||
+          old.state.dualColorMode != state.dualColorMode ||
+          old.state.leftColor != state.leftColor ||
+          old.state.rightColor != state.rightColor ||
+          old.state.splitMidi != state.splitMidi;
 }
