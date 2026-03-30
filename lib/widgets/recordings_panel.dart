@@ -14,17 +14,23 @@ class RecordingsPanel extends StatefulWidget {
   State<RecordingsPanel> createState() => _RecordingsPanelState();
 }
 
-class _RecordingsPanelState extends State<RecordingsPanel> {
+class _RecordingsPanelState extends State<RecordingsPanel>
+    with SingleTickerProviderStateMixin {
   bool _open = false;
 
-  bool _exporting    = false;
-  double _progress   = 0.0;
-  String _status     = '';
+  // 0 = MIDI tab, 1 = On-Screen tab
+  late final TabController _tabController;
+
+  bool   _exporting   = false;
+  double _progress    = 0.0;
+  String _status      = '';
   String? _exportingRecordingPath;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<RecordingService>().loadSavedRecordings();
     });
@@ -41,6 +47,7 @@ class _RecordingsPanelState extends State<RecordingsPanel> {
 
   @override
   void dispose() {
+    _tabController.dispose();
     VideoExportService.instance.onStateChanged = null;
     super.dispose();
   }
@@ -94,8 +101,8 @@ class _RecordingsPanelState extends State<RecordingsPanel> {
       return;
     }
 
-    final audioPath = await AudioExportService.instance
-        .generateAudio(recorder.events);
+    final audioPath =
+    await AudioExportService.instance.generateAudio(recorder.events);
 
     if (audioPath == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -105,7 +112,6 @@ class _RecordingsPanelState extends State<RecordingsPanel> {
       return;
     }
 
-    // FIX: pass List<CapturedFrame> (with timestamps) instead of List<Uint8List>
     final outputPath = await VideoExportService.instance.exportFramesToMp4(
       frames:     List.of(recorder.capturedFrames),
       audioPath:  audioPath,
@@ -127,15 +133,15 @@ class _RecordingsPanelState extends State<RecordingsPanel> {
           ),
           actions: [
             TextButton.icon(
-              icon: const Icon(Icons.folder_open, size: 16,
-                  color: Color(0xFF6090CC)),
+              icon: const Icon(Icons.folder_open,
+                  size: 16, color: Color(0xFF6090CC)),
               label: const Text('Save to folder',
                   style: TextStyle(color: Color(0xFF6090CC))),
               onPressed: () => Navigator.pop(context, true),
             ),
             TextButton.icon(
-              icon: const Icon(Icons.share, size: 16,
-                  color: Color(0xFFD060F0)),
+              icon: const Icon(Icons.share,
+                  size: 16, color: Color(0xFFD060F0)),
               label: const Text('Share',
                   style: TextStyle(color: Color(0xFFD060F0))),
               onPressed: () => Navigator.pop(context, false),
@@ -145,8 +151,8 @@ class _RecordingsPanelState extends State<RecordingsPanel> {
       );
 
       if (wantSave == true) {
-        final saved = await VideoExportService.instance
-            .saveToFile(outputPath, rec.name);
+        final saved =
+        await VideoExportService.instance.saveToFile(outputPath, rec.name);
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(saved ? 'Video saved!' : 'Save cancelled.',
@@ -173,15 +179,23 @@ class _RecordingsPanelState extends State<RecordingsPanel> {
   Widget build(BuildContext context) {
     return Consumer2<RecordingService, PianoState>(
       builder: (context, recorder, piano, _) {
+        final midiRecs = recorder.savedRecordings
+            .where((r) => r.source == RecordingSource.midi)
+            .toList();
+        final screenRecs = recorder.savedRecordings
+            .where((r) => r.source == RecordingSource.onScreen)
+            .toList();
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
 
-            // ── Toggle button ─────────────────────────────────────
+            // ── Toggle button ──────────────────────────────────────────────
             GestureDetector(
               onTap: () => setState(() => _open = !_open),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
                   color: const Color(0xFF1A1A28),
                   borderRadius: BorderRadius.circular(20),
@@ -209,7 +223,7 @@ class _RecordingsPanelState extends State<RecordingsPanel> {
               ),
             ),
 
-            // ── Export progress bar ────────────────────────────────
+            // ── Export progress bar ────────────────────────────────────────
             if (_exporting)
               Container(
                 width: 300,
@@ -230,13 +244,14 @@ class _RecordingsPanelState extends State<RecordingsPanel> {
                     LinearProgressIndicator(
                       value: _progress,
                       backgroundColor: const Color(0xFF1A2A3A),
-                      valueColor: const AlwaysStoppedAnimation(Color(0xFF3060A0)),
+                      valueColor: const AlwaysStoppedAnimation(
+                          Color(0xFF3060A0)),
                     ),
                   ],
                 ),
               ),
 
-            // ── Recordings list ────────────────────────────────────
+            // ── Recordings list (tabbed) ────────────────────────────────────
             if (_open)
               Container(
                 width: 300,
@@ -249,39 +264,102 @@ class _RecordingsPanelState extends State<RecordingsPanel> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (recorder.savedRecordings.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Text('No recordings yet.',
-                            style: TextStyle(
-                                fontSize: 12, color: Color(0xFF555577))),
-                      )
-                    else
-                      ...recorder.savedRecordings.map((rec) => _RecordingRow(
-                        recording:            rec,
-                        currentlyPlayingPath: recorder.currentlyPlayingPath,
-                        recordingPath:        rec.filePath,
-                        formatDuration:       _formatDuration,
-                        formatDate:           _formatDate,
-                        isExportingThis:      _exportingRecordingPath == rec.filePath,
-                        onPlay: () async {
-                          final ok = await recorder.loadRecording(rec);
-                          if (ok) recorder.play(piano, rec.filePath);
-                        },
-                        onStop:        () => recorder.stopPlayback(piano),
-                        onDelete:      () => recorder.deleteRecording(rec),
-                        onExportVideo: () =>
-                            _exportVideo(context, recorder, piano, rec),
-                      )),
+
+                    // ── Tab bar ────────────────────────────────────────────
+                    Container(
+                      decoration: const BoxDecoration(
+                        border: Border(
+                            bottom: BorderSide(
+                                color: Color(0xFF33334A), width: 1)),
+                        borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(12)),
+                      ),
+                      child: TabBar(
+                        controller: _tabController,
+                        labelStyle: const TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w600),
+                        unselectedLabelStyle:
+                        const TextStyle(fontSize: 12),
+                        labelColor: const Color(0xFF4090FF),
+                        unselectedLabelColor: const Color(0xFF555577),
+                        indicatorColor: const Color(0xFF4090FF),
+                        indicatorSize: TabBarIndicatorSize.tab,
+                        dividerColor: Colors.transparent,
+                        tabs: [
+                          Tab(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.piano, size: 13),
+                                const SizedBox(width: 5),
+                                Text('MIDI (${midiRecs.length})'),
+                              ],
+                            ),
+                          ),
+                          Tab(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.touch_app, size: 13),
+                                const SizedBox(width: 5),
+                                Text('Screen (${screenRecs.length})'),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // ── Tab views ──────────────────────────────────────────
+                    SizedBox(
+                      // enough room for ~3 recordings; scrolls if more
+                      height: 320,
+                      child: TabBarView(
+                        controller: _tabController,
+                        children: [
+                          // ── MIDI tab ─────────────────────────────────────
+                          _RecordingList(
+                            recordings:           midiRecs,
+                            recorder:             recorder,
+                            piano:                piano,
+                            exportingPath:        _exportingRecordingPath,
+                            formatDuration:       _formatDuration,
+                            formatDate:           _formatDate,
+                            onExportVideo:        (rec) =>
+                                _exportVideo(context, recorder, piano, rec),
+                            accentColor:          const Color(0xFF4090FF),
+                          ),
+
+                          // ── On-Screen tab ─────────────────────────────────
+                          _RecordingList(
+                            recordings:     screenRecs,
+                            recorder:       recorder,
+                            piano:          piano,
+                            exportingPath:  _exportingRecordingPath,
+                            formatDuration: _formatDuration,
+                            formatDate:     _formatDate,
+                            onExportVideo:  (rec) =>
+                                _exportVideo(context, recorder, piano, rec),
+                            accentColor:    const Color(0xFFD060F0),
+                          ),
+                        ],
+                      ),
+                    ),
 
                     const Divider(color: Color(0xFF22223A), height: 1),
 
-                    // Save row
+                    // ── Save row ───────────────────────────────────────────
+                    // FIX: Pass the source derived from the active tab index
+                    // so the recording is saved under the correct category
+                    // regardless of what currentSource is at call time.
                     Padding(
                       padding: const EdgeInsets.all(10),
                       child: _SaveRow(
                         onSave: (name) async {
-                          await recorder.saveRecording(name);
+                          final source = _tabController.index == 0
+                              ? RecordingSource.midi
+                              : RecordingSource.onScreen;
+                          await recorder.saveRecording(name, source: source);
                         },
                       ),
                     ),
@@ -289,6 +367,73 @@ class _RecordingsPanelState extends State<RecordingsPanel> {
                 ),
               ),
           ],
+        );
+      },
+    );
+  }
+}
+
+// ── Scrollable list for one source type ───────────────────────────────────────
+
+class _RecordingList extends StatelessWidget {
+  final List<SavedRecording> recordings;
+  final RecordingService recorder;
+  final PianoState piano;
+  final String? exportingPath;
+  final String Function(int) formatDuration;
+  final String Function(DateTime) formatDate;
+  final void Function(SavedRecording) onExportVideo;
+  final Color accentColor;
+
+  const _RecordingList({
+    required this.recordings,
+    required this.recorder,
+    required this.piano,
+    required this.exportingPath,
+    required this.formatDuration,
+    required this.formatDate,
+    required this.onExportVideo,
+    required this.accentColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (recordings.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Text(
+            'No recordings yet.\nUse the Record button above to start.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                fontSize: 12,
+                color: accentColor.withOpacity(0.4),
+                height: 1.6),
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      itemCount: recordings.length,
+      itemBuilder: (_, i) {
+        final rec = recordings[i];
+        return _RecordingRow(
+          recording:           rec,
+          currentlyPlayingPath: recorder.currentlyPlayingPath,
+          recordingPath:       rec.filePath,
+          formatDuration:      formatDuration,
+          formatDate:          formatDate,
+          isExportingThis:     exportingPath == rec.filePath,
+          accentColor:         accentColor,
+          onPlay: () async {
+            final ok = await recorder.loadRecording(rec);
+            if (ok) recorder.play(piano, rec.filePath);
+          },
+          onStop:        () => recorder.stopPlayback(piano),
+          onDelete:      () => recorder.deleteRecording(rec),
+          onExportVideo: () => onExportVideo(rec),
         );
       },
     );
@@ -310,7 +455,10 @@ class _SaveRowState extends State<_SaveRow> {
   bool _saving = false;
 
   @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -319,10 +467,12 @@ class _SaveRowState extends State<_SaveRow> {
         Expanded(
           child: TextField(
             controller: _ctrl,
-            style: const TextStyle(fontSize: 13, color: Color(0xFFDDDDFF)),
+            style:
+            const TextStyle(fontSize: 13, color: Color(0xFFDDDDFF)),
             decoration: InputDecoration(
               hintText: 'Recording name…',
-              hintStyle: const TextStyle(color: Color(0xFF555577), fontSize: 13),
+              hintStyle:
+              const TextStyle(color: Color(0xFF555577), fontSize: 13),
               filled: true,
               fillColor: const Color(0xFF0A0A0F),
               contentPadding:
@@ -347,7 +497,9 @@ class _SaveRowState extends State<_SaveRow> {
         ),
         const SizedBox(width: 8),
         GestureDetector(
-          onTap: _saving ? null : () async {
+          onTap: _saving
+              ? null
+              : () async {
             final name = _ctrl.text.trim();
             if (name.isEmpty) return;
             setState(() => _saving = true);
@@ -356,7 +508,8 @@ class _SaveRowState extends State<_SaveRow> {
             setState(() => _saving = false);
           },
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               color: const Color(0xFF2A1040),
               borderRadius: BorderRadius.circular(8),
@@ -364,12 +517,14 @@ class _SaveRowState extends State<_SaveRow> {
             ),
             child: _saving
                 ? const SizedBox(
-              width: 14, height: 14,
+              width: 14,
+              height: 14,
               child: CircularProgressIndicator(
                   strokeWidth: 2, color: Color(0xFFD060F0)),
             )
                 : const Text('Save',
-                style: TextStyle(fontSize: 12, color: Color(0xFFD060F0))),
+                style:
+                TextStyle(fontSize: 12, color: Color(0xFFD060F0))),
           ),
         ),
       ],
@@ -390,6 +545,7 @@ class _RecordingRow extends StatelessWidget {
   final VoidCallback onDelete;
   final VoidCallback onExportVideo;
   final bool isExportingThis;
+  final Color accentColor;
 
   const _RecordingRow({
     required this.recording,
@@ -402,6 +558,7 @@ class _RecordingRow extends StatelessWidget {
     required this.onDelete,
     required this.onExportVideo,
     required this.isExportingThis,
+    required this.accentColor,
   });
 
   @override
@@ -422,10 +579,9 @@ class _RecordingRow extends StatelessWidget {
                     Text(
                       recording.name,
                       style: const TextStyle(
-                        color: Color(0xFFDDDDFF),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
+                          color: Color(0xFFDDDDFF),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500),
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 2),
@@ -433,9 +589,7 @@ class _RecordingRow extends StatelessWidget {
                       '${formatDuration(recording.durationMs)}  ·  '
                           '${formatDate(recording.savedAt)}',
                       style: const TextStyle(
-                        color: Color(0xFF555577),
-                        fontSize: 11,
-                      ),
+                          color: Color(0xFF555577), fontSize: 11),
                     ),
                   ],
                 ),
@@ -448,13 +602,14 @@ class _RecordingRow extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2A1040),
+                    color: accentColor.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFD060F0)),
+                    border: Border.all(color: accentColor.withOpacity(0.6)),
                   ),
                   child: Icon(
                     isThisPlaying ? Icons.stop : Icons.play_arrow,
-                    size: 16, color: const Color(0xFFD060F0),
+                    size: 16,
+                    color: accentColor,
                   ),
                 ),
               ),
@@ -498,7 +653,8 @@ class _RecordingRow extends StatelessWidget {
                 children: [
                   if (isExportingThis)
                     const SizedBox(
-                      width: 12, height: 12,
+                      width: 12,
+                      height: 12,
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Color(0xFF6090CC)),
                     )

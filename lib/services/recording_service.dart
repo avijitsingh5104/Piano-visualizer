@@ -10,6 +10,21 @@ import '../models/piano_state.dart';
 import '../utils/constants.dart';
 import 'video_export_service.dart';
 
+// ── Recording source ──────────────────────────────────────────────────────────
+
+enum RecordingSource { midi, onScreen }
+
+extension RecordingSourceX on RecordingSource {
+  String get label => this == RecordingSource.midi ? 'midi' : 'onScreen';
+
+  // FIX: check for 'onScreen' explicitly so null (old files) and 'midi' both
+  // correctly resolve to RecordingSource.midi instead of onScreen.
+  static RecordingSource fromLabel(String? s) =>
+      s == 'onScreen' ? RecordingSource.onScreen : RecordingSource.midi;
+}
+
+// ── MIDI event ────────────────────────────────────────────────────────────────
+
 class MidiEvent {
   final int note;
   final int velocity;
@@ -38,27 +53,28 @@ class MidiEvent {
   );
 }
 
+// ── Saved recording ───────────────────────────────────────────────────────────
+
 class SavedRecording {
   final String name;
   final String filePath;
   final DateTime savedAt;
   final int durationMs;
+  final RecordingSource source;
 
   SavedRecording({
     required this.name,
     required this.filePath,
     required this.savedAt,
     required this.durationMs,
+    this.source = RecordingSource.midi,
   });
 }
 
-// Stores raw RGBA pixel data + the canvas dimensions + wall-clock timestamp.
-// Using raw RGBA (ImageByteFormat.rawRgba) instead of PNG means captureFrame()
-// does zero compression work — it just copies GPU pixels to RAM, which is
-// ~10x faster. The JPEG encoding happens later in a background isolate during
-// export, not on the UI thread during playback.
+// ── Captured frame (raw RGBA for video export) ────────────────────────────────
+
 class CapturedFrame {
-  final Uint8List rgbaBytes; // raw RGBA, width * height * 4 bytes
+  final Uint8List rgbaBytes;
   final int width;
   final int height;
   final DateTime capturedAt;
@@ -71,6 +87,8 @@ class CapturedFrame {
   });
 }
 
+// ── Recording service ─────────────────────────────────────────────────────────
+
 class RecordingService extends ChangeNotifier {
   final List<MidiEvent> events = [];
   DateTime? _startTime;
@@ -78,15 +96,22 @@ class RecordingService extends ChangeNotifier {
   bool isPlaying   = false;
   int _playbackId  = 0;
 
+  /// Source for the current (in-progress) recording session.
+  RecordingSource currentSource = RecordingSource.midi;
+
   List<SavedRecording> savedRecordings = [];
 
   final List<CapturedFrame> capturedFrames = [];
   bool isCapturing = false;
 
-  void start() {
+  // ── Start / Stop recording ────────────────────────────────────────────────
+
+  /// Call with the desired source before starting a new recording.
+  void start({RecordingSource source = RecordingSource.midi}) {
     events.clear();
-    _startTime  = DateTime.now();
-    isRecording = true;
+    _startTime    = DateTime.now();
+    isRecording   = true;
+    currentSource = source;
     notifyListeners();
   }
 
@@ -94,6 +119,8 @@ class RecordingService extends ChangeNotifier {
     isRecording = false;
     notifyListeners();
   }
+
+  // ── Note events ───────────────────────────────────────────────────────────
 
   void recordNoteOn(int note, int velocity) {
     if (!isRecording || _startTime == null) return;
@@ -115,19 +142,24 @@ class RecordingService extends ChangeNotifier {
     ));
   }
 
-  // ── Save / Load / Delete ─────────────────────────────────────────────────
+  // ── Save / Load / Delete ──────────────────────────────────────────────────
 
-  Future<bool> saveRecording(String name) async {
+  // FIX: Accept an explicit [source] parameter so the panel can pass the
+  // correct source based on the active tab, rather than relying solely on
+  // [currentSource] which may have drifted after stop() was called.
+  Future<bool> saveRecording(String name, {RecordingSource? source}) async {
     if (events.isEmpty) return false;
     try {
-      final dir      = await _recordingsDir();
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}.json';
-      final file     = File('${dir.path}/$fileName');
-      final durationMs = events.last.time;
+      final dir            = await _recordingsDir();
+      final fileName       = '${DateTime.now().millisecondsSinceEpoch}.json';
+      final file           = File('${dir.path}/$fileName');
+      final durationMs     = events.last.time;
+      final effectiveSource = source ?? currentSource;
       final json = jsonEncode({
         'name':       name,
         'savedAt':    DateTime.now().toIso8601String(),
         'durationMs': durationMs,
+        'source':     effectiveSource.label,
         'events':     events.map((e) => e.toJson()).toList(),
       });
       await file.writeAsString(json);
@@ -153,6 +185,8 @@ class RecordingService extends ChangeNotifier {
             filePath:   file.path,
             savedAt:    DateTime.parse(json['savedAt']),
             durationMs: json['durationMs'],
+            // Older files without 'source' field default to midi
+            source: RecordingSourceX.fromLabel(json['source'] as String?),
           ));
         } catch (_) {}
       }
@@ -173,6 +207,7 @@ class RecordingService extends ChangeNotifier {
       for (final e in (json['events'] as List)) {
         events.add(MidiEvent.fromJson(e));
       }
+      currentSource = RecordingSourceX.fromLabel(json['source'] as String?);
       notifyListeners();
       return true;
     } catch (e) {
@@ -198,7 +233,7 @@ class RecordingService extends ChangeNotifier {
     return dir;
   }
 
-  // ── Playback ─────────────────────────────────────────────────────────────
+  // ── Playback ──────────────────────────────────────────────────────────────
 
   String? currentlyPlayingPath;
 
@@ -216,7 +251,6 @@ class RecordingService extends ChangeNotifier {
     pianoState.setPlaying(true);
     notifyListeners();
 
-    // ── task scheduler ────────────────────────────────────────────────────
     final tasks = <_Task>[];
     for (final event in events) {
       if (event.isOn) {
@@ -231,14 +265,10 @@ class RecordingService extends ChangeNotifier {
     }
     tasks.sort((a, b) => a.ms.compareTo(b.ms));
 
-    // ── frame capture ─────────────────────────────────────────────────────
     if (captureVideo) {
       capturedFrames.clear();
       isCapturing = true;
 
-      // captureFrame() now returns raw RGBA (no PNG compression) so it runs
-      // fast enough to get 20-30 real fps during playback. Timestamps are
-      // stored so the concat demuxer can assign the exact per-frame duration.
       Future(() async {
         while (isCapturing) {
           final capturedAt = DateTime.now();
@@ -283,7 +313,7 @@ class RecordingService extends ChangeNotifier {
 
   void stopPlayback(PianoState pianoState) {
     _playbackId++;
-    isPlaying = false;
+    isPlaying   = false;
     isCapturing = false;
     pianoState.setPlaying(false);
     pianoState.releaseAll();
