@@ -10,10 +10,16 @@ class PianoState extends ChangeNotifier {
   final AudioService audio = AudioService();
 
   bool fallingMode = true;
+
+  /// Fired after fallingMode flips. RecordingsPanel hooks this to
+  /// restart playback with the correct timing offset for the new mode.
+  VoidCallback? onModeToggled;
+
   void toggleMode() {
     fallingMode = !fallingMode;
     bars.clear();
     notifyListeners();
+    onModeToggled?.call();
   }
 
   // ── Single color mode ────────────────────────────────────────────────────

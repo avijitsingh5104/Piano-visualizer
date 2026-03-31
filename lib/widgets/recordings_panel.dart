@@ -26,6 +26,10 @@ class _RecordingsPanelState extends State<RecordingsPanel>
   String _status      = '';
   String? _exportingRecordingPath;
 
+  SavedRecording? _activeRecording;
+  // Prevents multiple restarts racing if user toggles mode rapidly
+  bool _modeRestartInProgress = false;
+
   @override
   void initState() {
     super.initState();
@@ -33,6 +37,32 @@ class _RecordingsPanelState extends State<RecordingsPanel>
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<RecordingService>().loadSavedRecordings();
+
+      // Restart playback with correct offsets when user toggles falling/rising.
+      // _modeRestartInProgress guards against rapid double-toggles racing.
+      context.read<PianoState>().onModeToggled = () async {
+        if (_modeRestartInProgress) return;
+        final rec      = _activeRecording;
+        final recorder = context.read<RecordingService>();
+        final piano    = context.read<PianoState>();
+        if (rec == null || !recorder.isPlaying) return;
+
+        _modeRestartInProgress = true;
+        recorder.stopPlayback(piano);
+
+        // Wait for stopPlayback to fully settle before restarting
+        await Future.delayed(const Duration(milliseconds: 150));
+        if (!mounted) { _modeRestartInProgress = false; return; }
+
+        final loaded = await recorder.loadRecording(rec);
+        if (!loaded || !mounted) { _modeRestartInProgress = false; return; }
+
+        // Reset flag BEFORE awaiting play() — play() runs for the entire
+        // duration of the recording, so if we reset after, the flag stays
+        // true the whole time and blocks all subsequent mode toggles.
+        _modeRestartInProgress = false;
+        await recorder.play(piano, rec.filePath);
+      };
     });
 
     VideoExportService.instance.onStateChanged = () {
@@ -49,6 +79,7 @@ class _RecordingsPanelState extends State<RecordingsPanel>
   void dispose() {
     _tabController.dispose();
     VideoExportService.instance.onStateChanged = null;
+    try { context.read<PianoState>().onModeToggled = null; } catch (_) {}
     super.dispose();
   }
 
@@ -328,6 +359,19 @@ class _RecordingsPanelState extends State<RecordingsPanel>
                             onExportVideo:        (rec) =>
                                 _exportVideo(context, recorder, piano, rec),
                             accentColor:          const Color(0xFF4090FF),
+                            onPlay: (rec) async {
+                              _activeRecording = rec;
+                              final ok = await recorder.loadRecording(rec);
+                              if (ok) await recorder.play(piano, rec.filePath);
+                              // Don't clear _activeRecording here — user may
+                              // toggle mode again and we need it for restart.
+                              // It's only cleared in onStop.
+                            },
+                            onStop: () {
+                              _activeRecording = null;
+                              _modeRestartInProgress = false;
+                              recorder.stopPlayback(piano);
+                            },
                           ),
 
                           // ── On-Screen tab ─────────────────────────────────
@@ -341,6 +385,16 @@ class _RecordingsPanelState extends State<RecordingsPanel>
                             onExportVideo:  (rec) =>
                                 _exportVideo(context, recorder, piano, rec),
                             accentColor:    const Color(0xFFD060F0),
+                            onPlay: (rec) async {
+                              _activeRecording = rec;
+                              final ok = await recorder.loadRecording(rec);
+                              if (ok) await recorder.play(piano, rec.filePath);
+                            },
+                            onStop: () {
+                              _activeRecording = null;
+                              _modeRestartInProgress = false;
+                              recorder.stopPlayback(piano);
+                            },
                           ),
                         ],
                       ),
@@ -384,6 +438,8 @@ class _RecordingList extends StatelessWidget {
   final String Function(DateTime) formatDate;
   final void Function(SavedRecording) onExportVideo;
   final Color accentColor;
+  final Future<void> Function(SavedRecording) onPlay;
+  final VoidCallback onStop;
 
   const _RecordingList({
     required this.recordings,
@@ -394,6 +450,8 @@ class _RecordingList extends StatelessWidget {
     required this.formatDate,
     required this.onExportVideo,
     required this.accentColor,
+    required this.onPlay,
+    required this.onStop,
   });
 
   @override
@@ -427,11 +485,8 @@ class _RecordingList extends StatelessWidget {
           formatDate:          formatDate,
           isExportingThis:     exportingPath == rec.filePath,
           accentColor:         accentColor,
-          onPlay: () async {
-            final ok = await recorder.loadRecording(rec);
-            if (ok) recorder.play(piano, rec.filePath);
-          },
-          onStop:        () => recorder.stopPlayback(piano),
+          onPlay: () => onPlay(rec),
+          onStop: onStop,
           onDelete:      () => recorder.deleteRecording(rec),
           onExportVideo: () => onExportVideo(rec),
         );

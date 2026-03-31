@@ -256,11 +256,23 @@ class RecordingService extends ChangeNotifier {
       if (event.isOn) {
         tasks.add(_Task(ms: event.time,
             action: () => pianoState.spawnBar(event.note, event.velocity)));
-        tasks.add(_Task(ms: event.time + kFallDurationMs - 400,
-            action: () => pianoState.pressNote(event.note)));
+        if(pianoState.fallingMode) {
+          tasks.add(_Task(ms: event.time + kFallDurationMs - 400,
+              action: () => pianoState.pressNote(event.note)));
+        }
+        else{
+          tasks.add(_Task(ms: event.time,
+              action: () => pianoState.pressNote(event.note)));
+        }
       } else {
-        tasks.add(_Task(ms: event.time + kFallDurationMs - 400,
-            action: () => pianoState.releaseNote(event.note)));
+        if(pianoState.fallingMode) {
+          tasks.add(_Task(ms: event.time + kFallDurationMs - 400,
+              action: () => pianoState.releaseNote(event.note)));
+        }
+        else{
+          tasks.add(_Task(ms: event.time,
+              action: () => pianoState.releaseNote(event.note)));
+        }
       }
     }
     tasks.sort((a, b) => a.ms.compareTo(b.ms));
