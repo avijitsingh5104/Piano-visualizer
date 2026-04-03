@@ -6,6 +6,7 @@ import '../services/recording_service.dart';
 import '../services/video_export_service.dart';
 import '../models/piano_state.dart';
 import '../services/audio_export_service.dart';
+import 'dart:io';
 
 class RecordingsPanel extends StatefulWidget {
   const RecordingsPanel({super.key});
@@ -170,13 +171,14 @@ class _RecordingsPanelState extends State<RecordingsPanel>
                   style: TextStyle(color: Color(0xFF6090CC))),
               onPressed: () => Navigator.pop(context, true),
             ),
-            TextButton.icon(
-              icon: const Icon(Icons.share,
-                  size: 16, color: Color(0xFFD060F0)),
-              label: const Text('Share',
-                  style: TextStyle(color: Color(0xFFD060F0))),
-              onPressed: () => Navigator.pop(context, false),
-            ),
+            if(!Platform.isWindows)
+              TextButton.icon(
+                icon: const Icon(Icons.share,
+                    size: 16, color: Color(0xFFD060F0)),
+                label: const Text('Share',
+                    style: TextStyle(color: Color(0xFFD060F0))),
+                onPressed: () => Navigator.pop(context, false),
+              ),
           ],
         ),
       );
