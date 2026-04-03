@@ -41,9 +41,12 @@ class _ColorPickerDialogState extends State<ColorPickerDialog>
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+
     return Dialog(
       backgroundColor: const Color(0xFF16161F),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: SizedBox(
         width: 320,
         child: Column(
@@ -60,7 +63,8 @@ class _ColorPickerDialogState extends State<ColorPickerDialog>
                 indicatorColor: const Color(0xFFD060F0),
                 labelColor: const Color(0xFFD060F0),
                 unselectedLabelColor: const Color(0xFF555577),
-                labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                labelStyle:
+                const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                 tabs: const [
                   Tab(text: 'Single Color'),
                   Tab(text: 'Dual Color'),
@@ -68,7 +72,7 @@ class _ColorPickerDialogState extends State<ColorPickerDialog>
               ),
             ),
             SizedBox(
-              height: 420,
+              height: screenHeight * 0.42,
               child: TabBarView(
                 controller: _tab,
                 children: [
@@ -158,6 +162,7 @@ class _SingleColorTabState extends State<_SingleColorTab> {
             hue: _hsv.hue,
             saturation: _hsv.saturation,
             value: _hsv.value,
+            height: 110,
             onChanged: (s, v) {
               setState(() => _hsv = _hsv.withSaturation(s).withValue(v));
               _hexCtrl.text = _colorToHex(_hsv.toColor());
@@ -180,7 +185,8 @@ class _SingleColorTabState extends State<_SingleColorTab> {
           Row(
             children: [
               Container(
-                width: 40, height: 40,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
                   color: _hsv.toColor(),
                   borderRadius: BorderRadius.circular(8),
@@ -192,30 +198,33 @@ class _SingleColorTabState extends State<_SingleColorTab> {
                 child: TextField(
                   controller: _hexCtrl,
                   style: const TextStyle(
-                      color: Color(0xFFDDDDFF), fontSize: 13,
+                      color: Color(0xFFDDDDFF),
+                      fontSize: 13,
                       fontFamily: 'monospace'),
                   decoration: InputDecoration(
                     prefixText: '#',
-                    prefixStyle: const TextStyle(color: Color(0xFF888899)),
+                    prefixStyle:
+                    const TextStyle(color: Color(0xFF888899)),
                     filled: true,
                     fillColor: const Color(0xFF0A0A0F),
-                    contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 8),
                     border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide:
-                        const BorderSide(color: Color(0xFF33334A))),
+                        borderSide: const BorderSide(
+                            color: Color(0xFF33334A))),
                     enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide:
-                        const BorderSide(color: Color(0xFF33334A))),
+                        borderSide: const BorderSide(
+                            color: Color(0xFF33334A))),
                     focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide:
-                        const BorderSide(color: Color(0xFFD060F0))),
+                        borderSide: const BorderSide(
+                            color: Color(0xFFD060F0))),
                   ),
                   inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9a-fA-F]')),
+                    FilteringTextInputFormatter.allow(
+                        RegExp(r'[0-9a-fA-F]')),
                     LengthLimitingTextInputFormatter(6),
                   ],
                   onTap: () => setState(() => _editingHex = true),
@@ -244,8 +253,10 @@ class _SingleColorTabState extends State<_SingleColorTab> {
           _Label('Presets'),
           const SizedBox(height: 6),
           Wrap(
-            spacing: 8, runSpacing: 8,
-            children: _kPresets.map((c) => GestureDetector(
+            spacing: 8,
+            runSpacing: 8,
+            children: _kPresets
+                .map((c) => GestureDetector(
               onTap: () {
                 setState(() {
                   _hsv = HSVColor.fromColor(c);
@@ -254,7 +265,8 @@ class _SingleColorTabState extends State<_SingleColorTab> {
                 _emit();
               },
               child: Container(
-                width: 28, height: 28,
+                width: 28,
+                height: 28,
                 decoration: BoxDecoration(
                   color: c,
                   shape: BoxShape.circle,
@@ -266,7 +278,8 @@ class _SingleColorTabState extends State<_SingleColorTab> {
                   ),
                 ),
               ),
-            )).toList(),
+            ))
+                .toList(),
           ),
         ],
       ),
@@ -333,7 +346,8 @@ class _DualColorTab extends StatelessWidget {
 class _InlineColorPicker extends StatefulWidget {
   final Color color;
   final ValueChanged<Color> onChanged;
-  const _InlineColorPicker({required this.color, required this.onChanged});
+  const _InlineColorPicker(
+      {required this.color, required this.onChanged});
 
   @override
   State<_InlineColorPicker> createState() => _InlineColorPickerState();
@@ -374,7 +388,8 @@ class _InlineColorPickerState extends State<_InlineColorPicker> {
         Row(
           children: [
             Container(
-              width: 28, height: 28,
+              width: 28,
+              height: 28,
               decoration: BoxDecoration(
                 color: _hsv.toColor(),
                 borderRadius: BorderRadius.circular(6),
@@ -396,14 +411,17 @@ class _InlineColorPickerState extends State<_InlineColorPicker> {
         const SizedBox(height: 6),
         // Preset row
         Wrap(
-          spacing: 6, runSpacing: 6,
-          children: _kPresets.map((c) => GestureDetector(
+          spacing: 6,
+          runSpacing: 6,
+          children: _kPresets
+              .map((c) => GestureDetector(
             onTap: () {
               setState(() => _hsv = HSVColor.fromColor(c));
               widget.onChanged(c);
             },
             child: Container(
-              width: 22, height: 22,
+              width: 22,
+              height: 22,
               decoration: BoxDecoration(
                 color: c,
                 shape: BoxShape.circle,
@@ -415,66 +433,16 @@ class _InlineColorPickerState extends State<_InlineColorPicker> {
                 ),
               ),
             ),
-          )).toList(),
+          ))
+              .toList(),
         ),
       ],
     );
   }
 }
 
-// ── Gradient preview bar ──────────────────────────────────────────────────────
+// ── Gradient bar ──────────────────────────────────────────────────────────────
 
-class _GradientPreview extends StatelessWidget {
-  final Color leftColor;
-  final Color rightColor;
-  final int splitMidi;
-  const _GradientPreview(
-      {required this.leftColor,
-        required this.rightColor,
-        required this.splitMidi});
-
-  @override
-  Widget build(BuildContext context) {
-    final splitFrac =
-    ((splitMidi - 21) / (108 - 21)).clamp(0.0, 1.0);
-    return Container(
-      height: 28,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(6),
-        gradient: LinearGradient(
-          colors: [leftColor, rightColor],
-          stops: [0.0, 1.0],
-        ),
-        border: Border.all(color: const Color(0xFF33334A)),
-      ),
-      child: Stack(
-        children: [
-          // Split point marker
-          Positioned(
-            left: splitFrac * (double.infinity == double.infinity
-                ? 0
-                : 0), // handled via LayoutBuilder
-            top: 0, bottom: 0,
-            child: LayoutBuilder(builder: (ctx, box) {
-              return Positioned(
-                left: splitFrac *
-                    (box.maxWidth == double.infinity ? 0 : box.maxWidth) -
-                    1,
-                top: 0, bottom: 0,
-                child: Container(
-                  width: 2,
-                  color: Colors.white.withOpacity(0.7),
-                ),
-              );
-            }),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// Cleaner gradient preview using LayoutBuilder properly
 class _GradientBar extends StatelessWidget {
   final Color leftColor;
   final Color rightColor;
@@ -493,15 +461,15 @@ class _GradientBar extends StatelessWidget {
         height: 28,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(6),
-          gradient:
-          LinearGradient(colors: [leftColor, rightColor]),
+          gradient: LinearGradient(colors: [leftColor, rightColor]),
           border: Border.all(color: const Color(0xFF33334A)),
         ),
         child: Stack(
           children: [
             Positioned(
               left: splitFrac * box.maxWidth - 1,
-              top: 0, bottom: 0,
+              top: 0,
+              bottom: 0,
               child: Container(
                   width: 2,
                   color: Colors.white.withOpacity(0.8)),
@@ -532,13 +500,11 @@ class _KeyboardSplitSlider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Mini keyboard visualization
         _KeyboardVisualizer(
             splitMidi: splitMidi,
             leftColor: leftColor,
             rightColor: rightColor),
         const SizedBox(height: 8),
-        // Slider
         SliderTheme(
           data: SliderTheme.of(context).copyWith(
             trackHeight: 4,
@@ -611,15 +577,21 @@ class _KeyboardVisualizer extends StatelessWidget {
             final i    = e.key;
             final midi = e.value;
             final t    = (midi - kMin) / (kMax - kMin);
-            final splitT = ((splitMidi - kMin) / (kMax - kMin)).clamp(0.0, 1.0);
-            final norm = splitT == 0 ? t : splitT == 1 ? t
-                : t < splitT ? (t / splitT) * 0.5
+            final splitT =
+            ((splitMidi - kMin) / (kMax - kMin)).clamp(0.0, 1.0);
+            final norm = splitT == 0
+                ? t
+                : splitT == 1
+                ? t
+                : t < splitT
+                ? (t / splitT) * 0.5
                 : 0.5 + ((t - splitT) / (1.0 - splitT)) * 0.5;
             final color = Color.lerp(leftColor, rightColor, norm)!;
 
             return Positioned(
               left: i * ww,
-              top: 0, bottom: 0,
+              top: 0,
+              bottom: 0,
               width: ww - 1,
               child: Container(
                 decoration: BoxDecoration(
@@ -637,11 +609,10 @@ class _KeyboardVisualizer extends StatelessWidget {
             );
           }),
 
-          // Black keys (drawn on top)
+          // Black keys
           ...List.generate(kMax - kMin + 1, (i) => kMin + i)
               .where((m) => _blackSemitones.contains(m % 12))
               .map((midi) {
-            // Find position based on white key to the left
             int wi = whites.indexOf(midi - 1);
             if (wi < 0) return const SizedBox.shrink();
             final x = (wi + 1) * ww - bw / 2;
@@ -693,7 +664,7 @@ class _SvCanvas extends StatefulWidget {
     required this.saturation,
     required this.value,
     required this.onChanged,
-    this.height = 140,
+    this.height = 110,
   });
 
   @override
@@ -742,18 +713,16 @@ class _SvPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Base hue
     final baseColor = HSVColor.fromAHSV(1, hue, 1, 1).toColor();
 
-    // White gradient (left → right: white → baseColor)
     canvas.drawRect(
       Rect.fromLTWH(0, 0, size.width, size.height),
       Paint()
         ..shader = LinearGradient(colors: [Colors.white, baseColor])
-            .createShader(Rect.fromLTWH(0, 0, size.width, size.height)),
+            .createShader(
+            Rect.fromLTWH(0, 0, size.width, size.height)),
     );
 
-    // Black gradient (top → bottom: transparent → black)
     canvas.drawRect(
       Rect.fromLTWH(0, 0, size.width, size.height),
       Paint()
@@ -761,23 +730,28 @@ class _SvPainter extends CustomPainter {
           begin: Alignment.topCenter,
           end:   Alignment.bottomCenter,
           colors: [Colors.transparent, Colors.black],
-        ).createShader(Rect.fromLTWH(0, 0, size.width, size.height)),
+        ).createShader(
+            Rect.fromLTWH(0, 0, size.width, size.height)),
     );
 
-    // Thumb
     final tx = saturation * size.width;
     final ty = (1 - value) * size.height;
-    canvas.drawCircle(
-        Offset(tx, ty), 8,
-        Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 2);
-    canvas.drawCircle(
-        Offset(tx, ty), 6,
-        Paint()..color = HSVColor.fromAHSV(1, hue, saturation, value).toColor());
+    canvas.drawCircle(Offset(tx, ty), 8,
+        Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2);
+    canvas.drawCircle(Offset(tx, ty), 6,
+        Paint()
+          ..color =
+          HSVColor.fromAHSV(1, hue, saturation, value).toColor());
   }
 
   @override
   bool shouldRepaint(covariant _SvPainter old) =>
-      old.hue != hue || old.saturation != saturation || old.value != value;
+      old.hue != hue ||
+          old.saturation != saturation ||
+          old.value != value;
 }
 
 // ── Hue slider ────────────────────────────────────────────────────────────────
@@ -791,15 +765,13 @@ class _HueSlider extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onPanUpdate: (d) {
-        final box =
-        context.findRenderObject() as RenderBox?;
+        final box = context.findRenderObject() as RenderBox?;
         if (box == null) return;
         final x = d.localPosition.dx.clamp(0.0, box.size.width);
         onChanged((x / box.size.width * 360).clamp(0.0, 360.0));
       },
       onTapDown: (d) {
-        final box =
-        context.findRenderObject() as RenderBox?;
+        final box = context.findRenderObject() as RenderBox?;
         if (box == null) return;
         final x = d.localPosition.dx.clamp(0.0, box.size.width);
         onChanged((x / box.size.width * 360).clamp(0.0, 360.0));
@@ -824,21 +796,22 @@ class _HuePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Rainbow gradient
     canvas.drawRect(
       Rect.fromLTWH(0, 0, size.width, size.height),
       Paint()
         ..shader = LinearGradient(colors: [
           for (int i = 0; i <= 6; i++)
             HSVColor.fromAHSV(1, i * 60.0, 1, 1).toColor(),
-        ]).createShader(Rect.fromLTWH(0, 0, size.width, size.height)),
+        ]).createShader(
+            Rect.fromLTWH(0, 0, size.width, size.height)),
     );
-    // Thumb
     final tx = hue / 360 * size.width;
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromCenter(
-            center: Offset(tx, size.height / 2), width: 4, height: size.height),
+            center: Offset(tx, size.height / 2),
+            width: 4,
+            height: size.height),
         const Radius.circular(2),
       ),
       Paint()..color = Colors.white,
@@ -854,14 +827,18 @@ class _HuePainter extends CustomPainter {
 Widget _Label(String text) => Text(
   text,
   style: const TextStyle(
-      color: Color(0xFF888899), fontSize: 11, fontWeight: FontWeight.w600),
+      color: Color(0xFF888899),
+      fontSize: 11,
+      fontWeight: FontWeight.w600),
 );
 
 String _colorToHex(Color c) =>
     c.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase();
 
 String _midiName(int midi) {
-  const names = ['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
+  const names = [
+    'C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'
+  ];
   return '${names[midi % 12]}${(midi ~/ 12) - 1}';
 }
 

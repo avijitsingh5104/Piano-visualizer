@@ -293,6 +293,22 @@ class VideoExportService {
 
   Future<bool> saveToFile(String srcPath, String recordingName) async {
     final safeName = recordingName.replaceAll(RegExp(r'[^\w\s]'), '_');
+    if (Platform.isAndroid) {
+      // Android: save directly to Downloads folder
+      final downloads = Directory('/storage/emulated/0/Download');
+      if (!await downloads.exists()) {
+        await downloads.create(recursive: true);
+      }
+      final destPath = '${downloads.path}/$safeName.mp4';
+      try {
+        await File(srcPath).copy(destPath);
+        debugPrint('Saved to: $destPath');
+        return true;
+      } catch (e) {
+        debugPrint('saveToFile Android error: $e');
+        return false;
+      }
+    }
     final destPath = await FilePicker.platform.saveFile(
       dialogTitle:       'Save video as…',
       fileName:          '$safeName.mp4',

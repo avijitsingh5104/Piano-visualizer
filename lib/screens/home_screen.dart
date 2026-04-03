@@ -10,6 +10,7 @@ import '../services/recording_service.dart';
 import '../services/video_export_service.dart';
 import '../widgets/recordings_panel.dart';
 import '../widgets/color_picker_dialog.dart';
+import 'dart:io';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -147,7 +148,8 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       },
     );
-    ctrl.dispose();
+    WidgetsBinding.instance.addPostFrameCallback((_) => ctrl.dispose());
+
   }
 
   // ── Source picker shown before starting a recording ────────────────────────
@@ -264,7 +266,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // Falling / Rising toggle
           Positioned(
-            top: 16,
+            top: Platform.isAndroid? 32: 16,
             left: 16,
             child: Consumer<PianoState>(
               builder: (context, state, _) {
@@ -331,7 +333,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // ── Record / Stop button ─────────────────────────────────────────
           Positioned(
-            top: 16,
+            top: Platform.isAndroid? 32:16,
             right: 16,
             child: Consumer<RecordingService>(
               builder: (context, recorder, _) {
@@ -375,8 +377,8 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
 
           // Recordings panel
-          const Positioned(
-            top: 60,
+          Positioned(
+            top: Platform.isAndroid? 76:60,
             right: 16,
             child: RecordingsPanel(),
           ),

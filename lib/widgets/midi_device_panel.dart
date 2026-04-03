@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/piano_state.dart';
 import '../services/midi_service.dart';
+import 'dart:io';
 
 class MidiDeviceButton extends StatefulWidget {
   const MidiDeviceButton({super.key});
@@ -11,6 +12,16 @@ class MidiDeviceButton extends StatefulWidget {
 
 class _MidiDevicePanelState extends State<MidiDeviceButton> {
   bool _open = false;
+  bool _scanning = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // Show scanning for 2 seconds on startup then let real state take over
+    Future.delayed(const Duration(seconds: 18), () {
+      if (mounted) setState(() => _scanning = false);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +34,7 @@ class _MidiDevicePanelState extends State<MidiDeviceButton> {
           children: [
             // ── Floating button ───────────────────────────────────
             Positioned(
-              top: 60,
+              top: Platform.isAndroid? 76:60,
               left: 16,
               child: GestureDetector(
                 onTap: () => setState(() => _open = !_open),
@@ -54,7 +65,9 @@ class _MidiDevicePanelState extends State<MidiDeviceButton> {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        connected > 0
+                        _scanning && !hasDevices
+                            ? 'Scanning…'
+                            : connected > 0
                             ? '$connected connected'
                             : hasDevices
                             ? '${state.devices.length} device${state.devices.length > 1 ? 's' : ''} found'
@@ -130,12 +143,14 @@ class _MidiDevicePanelState extends State<MidiDeviceButton> {
 
                       // Device list
                       if (state.devices.isEmpty)
-                        const Padding(
+                        Padding(
                           padding: EdgeInsets.all(16),
                           child: Text(
-                            'No MIDI devices detected.\nPlug in your keyboard and wait\na moment, or tap ↻ to scan.',
+                            _scanning
+                                ? 'Scanning for MIDI devices…'
+                                : 'No MIDI devices detected.\nPlug in your keyboard and wait\na moment, or tap ↻ to scan.',
                             style: TextStyle(
-                              color: Color(0xFF555577),
+                              color: _scanning ? const Color(0xFF8888AA) : const Color(0xFF555577),
                               fontSize: 12,
                               height: 1.5,
                             ),
