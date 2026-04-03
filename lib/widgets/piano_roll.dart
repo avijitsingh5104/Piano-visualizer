@@ -69,12 +69,26 @@ class _PianoRollVisualizerState extends State<PianoRollVisualizer>
 
   void _updateBarPosition(NoteBar bar, DateTime now) {
     if (!bar.isPlayback) {
-      bar.y += _isFalling ? kFallSpeed : -kFallSpeed;
+      final elapsedMs = now.difference(bar.spawnedAt).inMicroseconds / 1000.0;
+      final travelled = (elapsedMs / kFallDurationMs) * _canvasHeight;
+
+      if (_isFalling) {
+        // Bar bottom starts at top (y=0), moves down
+        // Height grows until full bar height is revealed
+        final visibleHeight = min(travelled, bar.height);
+        bar.y = travelled - visibleHeight;
+        bar.visibleHeight = visibleHeight;
+      } else {
+        final visibleHeight = min(travelled, bar.height);
+        bar.y = _canvasHeight - travelled;
+        bar.visibleHeight = visibleHeight;
+      }
     } else {
       final elapsedMs   = now.difference(bar.spawnedAt).inMicroseconds / 1000.0;
       final travelTotal = _canvasHeight + bar.height;
       final travelled   = (elapsedMs / kFallDurationMs) * travelTotal;
       bar.y = _isFalling ? -bar.height + travelled : _canvasHeight - travelled;
+      bar.visibleHeight = bar.height; // playback bars always full height
     }
     bar.phase = (bar.phase + 0.1) % (2 * pi);
   }
@@ -144,6 +158,7 @@ class NoteBar {
   final int midi;
   double y;
   final double height;
+  double visibleHeight;
   final int velocity;
   double phase;
   final bool isPlayback;
@@ -152,13 +167,13 @@ class NoteBar {
   NoteBar.playback({
     required this.midi, required this.height,
     required this.velocity, required this.spawnedAt,
-  })  : y = 0, phase = 0, isPlayback = true;
+  })  : y = 0, phase = 0, isPlayback = true, visibleHeight=0;
 
   NoteBar.live({
     required this.midi, required this.y,
     required this.height, required this.velocity,
-  })  : phase = 0, isPlayback = false,
-        spawnedAt = DateTime.fromMillisecondsSinceEpoch(0);
+  })  : phase = 0, isPlayback = false, visibleHeight=0,
+        spawnedAt = DateTime.now();
 }
 
 // ── Painter ───────────────────────────────────────────────────────────────────
@@ -197,7 +212,7 @@ class _RollPainter extends CustomPainter {
 
       final x     = layout.$1 * w;
       final width = layout.$2 * w;
-      final rect  = Rect.fromLTWH(x, bar.y, width, bar.height);
+      final rect  = Rect.fromLTWH(x, bar.y, width, bar.visibleHeight);
       final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(4));
 
       final brightness = (bar.velocity / 127).clamp(0.4, 1.0);
